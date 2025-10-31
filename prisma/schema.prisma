@@ -1,0 +1,138 @@
+// This is your Prisma schema file for BucketSwipe
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// USER MODEL
+// ==========================================
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  username        String   @unique
+  passwordHash    String
+  profileImageUrl String?
+  bio             String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  bucketLists BucketList[]
+  swipes      Swipe[]
+  comments    Comment[]
+
+  @@map("users")
+}
+
+// ==========================================
+// BUCKET LIST MODEL (Main container for goals)
+// ==========================================
+model BucketList {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  emoji       String?  // Optional emoji for visual representation
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  userId User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  items BucketListItem[]
+
+  @@index([userId])
+  @@map("bucket_lists")
+}
+
+// ==========================================
+// BUCKET LIST ITEM MODEL (Individual goals)
+// ==========================================
+model BucketListItem {
+  id          String             @id @default(uuid())
+  title       String
+  description String?
+  imageUrl    String?            // Optional image for the item
+  status      BucketItemStatus   @default(PENDING)
+  isPublic    Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  completedAt DateTime?
+
+  // Relations
+  bucketListId String
+  bucketList   BucketList @relation(fields: [bucketListId], references: [id], onDelete: Cascade)
+
+  swipes   Swipe[]
+  comments Comment[]
+
+  @@index([bucketListId])
+  @@index([isPublic, status]) // Optimize feed queries
+  @@map("bucket_list_items")
+}
+
+// ==========================================
+// SWIPE MODEL (Feed interactions)
+// ==========================================
+model Swipe {
+  id        String   @id @default(uuid())
+  liked     Boolean  // true = right swipe (support), false = left swipe (skip)
+  createdAt DateTime @default(now())
+
+  // Relations
+  swiperId String
+  swiper   User   @relation(fields: [swiperId], references: [id], onDelete: Cascade)
+
+  itemId String
+  item   BucketListItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  // Ensure a user can only swipe once per item
+  @@unique([swiperId, itemId])
+  @@index([swiperId])
+  @@index([itemId])
+  @@map("swipes")
+}
+
+// ==========================================
+// COMMENT MODEL (Comments, tips, suggestions)
+// ==========================================
+model Comment {
+  id          String      @id @default(uuid())
+  content     String
+  commentType CommentType @default(COMMENT)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  itemId String
+  item   BucketListItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([authorId])
+  @@map("comments")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+enum BucketItemStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum CommentType {
+  COMMENT     // General comment
+  TIP         // Helpful tip
+  SUGGESTION  // Suggestion for improvement
+}
